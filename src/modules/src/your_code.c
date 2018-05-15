@@ -16,7 +16,7 @@
  * which is usually handles the control of the crazyflie.
  *
  ***/
- #define SAMPLE_TIME 0.002
+ #define SAMPLE_TIME 200
  #define GAMMA 0.98
  
  typedef struct{
@@ -24,14 +24,15 @@
  	float pitch;
  	} complementaryAngle;
  	
- complementaryAngle comp_angle;
- complementaryAngle acc_angle;
+ static complementaryAngle comp_angle;
+ static complementaryAngle acc_angle;
  
  static complementaryAngle angle_state;
  static complementaryAngle angle_out;
  
  static float K[4][4] = {{-0.2883,-0.3406,-0.0297,-0.0353},{-0.2883,-0.3406,-0.0297,-0.0353},{-0.2883,-0.3406,-0.0297,-0.0353},{-0.2883,-0.3406,-0.0297,-0.0353}};
  static float Kr[4][2] ={{-0.2883,-0.3406},{-0.2883,-0.3406},{-0.2883,-0.3406},{-0.2883,-0.3406}};
+ static float krr[4] = {0,0,0,0};
  
  sensorData_t sensorData;
  setpoint_t setpoint;
@@ -43,68 +44,76 @@
  	arg->pitch = 0;
  }
  
- void accDataRead(void *arg)  // function to extract angle from acc data
+ void compFilter(void *arg)  // function to extract angle from acc data
  {
-    float f_x, f_y, f_z, tanarg;
- 	sensorAcquire(&sensorData);
- 	f_x = sensorData.acc.x;
- 	f_y = sensorData.acc.y;
- 	f_z = sensorData.acc.z;
+ 	TickType_t xLastWakeTimeAcc;
  	
- 	acc_angle.roll = (atan2((-f_x),(sqrt(f_y^2 + f_z^2))) * (180/M_PI));
- 	acc_angle.pitch = (atan2(f_y,f_z) * (180/M_PI));
+ 	while(1)
+ 	{
+ 		vTaskDelayUntil(&xLastWakeTimeAcc, F2T(SAMPLE_TIME));
  	
- }
- 
- void compFilter(void *arg1) // function to compute quadrotor orientation
- {
- 	sensorAcquire(&sensorData);
- 	float gy_roll, gy_pitch;
- 	gy_roll = sensorData.gyro.x;
- 	gy_pitch = sensorData.gyro.y;
+	    float f_x, f_y, f_z, tanarg;
+	    float gy_roll, gy_pitch;
+ 		sensorAcquire(&sensorData);
  	
- 	 	
- 	angle_state.roll = angle_out.roll;
- 	angle_state.pitch = angle_out.pitch;
- 	
- 	angle_out.roll = ((acc_angle.roll)*(1-GAMMA)) + (((gy_roll * SAMPLE_TIME) + angle_state.roll)*GAMMA);
- 	angle_out.pitch = ((acc_angle.pitch)*(1-GAMMA)) + (((gy_pitch * SAMPLE_TIME) + angle_state.pitch)*GAMMA);	 	
+ 		f_x = sensorData.acc.x;
+	 	f_y = sensorData.acc.y;
+	 	f_z = sensorData.acc.z;	
+	 	gy_roll = sensorData.gyro.x;
+ 		gy_pitch = sensorData.gyro.y;
+ 		
+ 		acc_angle.roll = (atan2((-f_x),(sqrt(f_y^2 + f_z^2))) * (180/M_PI));
+ 		acc_angle.pitch = (atan2(f_y,f_z) * (180/M_PI)); 	
+ 		 	
+ 		angle_state.roll = angle_out.roll;
+ 		angle_state.pitch = angle_out.pitch;
+ 		
+ 		angle_out.roll = ((acc_angle.roll)*(1-GAMMA)) + (((gy_roll * SAMPLE_TIME) + angle_state.roll)*GAMMA);
+ 		angle_out.pitch = ((acc_angle.pitch)*(1-GAMMA)) + (((gy_pitch * SAMPLE_TIME) + angle_state.pitch)*GAMMA);	 	
+ 		}
  } 
+ 
+ void setPointGen(void *arg3)
+ {
+ 	while(1)
+ 	{
+ 		//Generate Kr * r vector
+ 		commanderGetSetpoint(&setpoint);	
+ 		float ref_vec[2] = {setpoint.attitude.roll, setpoint.attitude.pitch};
+ 		for (i =0; i<4; i++)
+ 		{
+ 			for(j=0; j<2; j++)
+ 			{
+ 				krr[i] = krr[i] + ref_vec[j]*Kr[i][j];
+ 			}
+ 		}
+ 	}
+ }
  
  void LQR(void *arg2)
  {
- 	//Generate K*x vector
- 	int i, j;
- 	float state_vec[4] = {angle_out.roll, angle_out.pitch, sensorData.gyro.x, sensorData.gyro.y};
- 	float kx[4]= {0,0,0,0};
- 	for(i= 0; i<4; i++)
+ 	while(1)
  	{
- 		for (j = 0; i <4; j++)
+ 	
+ 		//Generate K*x vector
+ 		int i, j;
+ 		float state_vec[4] = {angle_out.roll, angle_out.pitch, sensorData.gyro.x, sensorData.gyro.y};
+ 		float kx[4]= {0,0,0,0};
+ 		for(i= 0; i<4; i++)
  		{
- 			kx[i] = kx[i] + state_vec[j]*K[i][j];
+ 			for (j = 0; i <4; j++)
+ 			{
+ 				kx[i] = kx[i] + state_vec[j]*K[i][j];
+ 			}
  		}
+ 		
+ 		//Generate Control signals
  	}
- 	
- 	//Generate Kr * r vector
- 	commanderGetSetpoint(&setpoint);	
- 	float ref_vec[2] = {setpoint.attitude.roll, setpoint.attitude.pitch};
- 	float krr[4] = {0,0,0,0};
- 	for (i =0; i<4; i++)
- 	{
- 		for(j=0; j<2; j++)
- 		{
- 			krr[i] = krr[i] + ref_vec[j]*Kr[i][j];
- 		}
- 	}
- 	
- 	//Generate Control signals
- 	
- 	
  }
+
 
  void yourCodeInit(void)
  {
- 	taskHandle_t taskAccRead;
  	taskHandle_t taskComp;
  	taskHandle_t taskContr;
  	sensorInit();
@@ -114,7 +123,6 @@
    /*
     * CREATE AND EXECUTE YOUR TASKS FROM HERE
     */
-    xTaskCreate(accDataRead, "Convert Acc Data", configMINIMAL_STACK_SIZE, NULL , 1, taskAccRead);
     xTaskCreate(compFilter, "Complementary Filter", configMINIMAL_STACK_SIZE, NULL, 1, taskComp);
     xTaskCreate(LQR, "Controller", configMINIMAL_STACK_SIZE, NULL, 1, taskContr);
  }
