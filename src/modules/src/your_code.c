@@ -35,8 +35,11 @@
  static float krr[4] = {0,0,0,0};
  static float kx[4]= {0,0,0,0};
  static float controlInput[4] = {0,0,0,0};
+<<<<<<< HEAD
  static float stateVector[4] = {0,0,0,0};
  
+=======
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  
  sensorData_t sensorData;
  setpoint_t setpoint;
@@ -59,7 +62,11 @@
  	
  	while(1)
  	{
+<<<<<<< HEAD
  		vTaskDelayUntil(&xLastWakeTimeComp, M2T(SAMPLE_TIME));
+=======
+ 		vTaskDelayUntil(&xLastWakeTimeAcc, M2T(SAMPLE_TIME));
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  	
 	    float f_x, f_y, f_z;
 	    float gy_roll, gy_pitch;
@@ -72,8 +79,11 @@
 	 	f_z = sensorData.acc.z;	
 	 	gy_roll = sensorData.gyro.x;
  		gy_pitch = sensorData.gyro.y;
+<<<<<<< HEAD
  		stateVector[2] = gy_roll;
  		stateVector[3] = gy_pitch;
+=======
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  		xSemaphoreGive(xSemaphoreSensor);                // releasing sensor
  		
  		acc_angle.roll = (atan2((-f_x),(sqrt(f_y*f_y + f_z*f_z))) * (180/M_PI));
@@ -82,17 +92,24 @@
  		xSemaphoreTake(xSemaphoreAngle, portMAX_DELAY);  // protecting angle data
  		angle_out.roll = ((acc_angle.roll)*(1-GAMMA)) + (((gy_roll * SAMPLE_TIME) + angle_out.roll)*GAMMA);
  		angle_out.pitch = ((acc_angle.pitch)*(1-GAMMA)) + (((gy_pitch * SAMPLE_TIME) + angle_out.pitch)*GAMMA);	
+<<<<<<< HEAD
 		stateVector[0] = angle_out.roll;
 		stateVector[1] = angle_out.pitch; 		
 		xSemaphoreGive(xSemaphoreAngle); 	             // releasing angle
  		
+=======
+ 		xSemaphoreGive(xSemaphoreAngle); 	             // releasing angle
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  		}
  } 
  
  void setPointGen(void *arg3)
  {
  	TickType_t xLastWakeTimeSet;
+<<<<<<< HEAD
  	xLastWakeTimeSet = xTaskGetTickCount ();
+=======
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  	while(1)
  	{
  		vTaskDelayUntil(&xLastWakeTimeSet, M2T(SAMPLE_TIME));
@@ -111,7 +128,11 @@
  				krr[i] = krr[i] + ref_vec[j]*Kr[i][j];
  			}
  		}
+<<<<<<< HEAD
  		xSemaphoreGive(xSemaphoreSet);
+=======
+ 		xSemaphoreGive(xSemaphoreSet)
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  	}
  }
  
@@ -125,7 +146,16 @@
  	{
  		vTaskDelayUntil(&xLastWakeTimeLQR, M2T(SAMPLE_TIME));
  		//Generate K*x vector
+<<<<<<< HEAD
 
+=======
+ 		
+ 		xSemaphoreTake(xSemaphoreAngle, portMAX_DELAY);
+ 		xSemaphoreTake(xSemaphoreSensor, portMAX_DELAY);
+ 		float state_vec[4] = {angle_out.roll, angle_out.pitch, sensorData.gyro.x, sensorData.gyro.y};
+ 		xSemaphoreGive(xSemaphoreAngle);
+ 		xSemaphoreGive(xSemaphoreSensor);
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  		
  		for(i= 0; i<4; i++)
  		{
@@ -171,9 +201,15 @@
  	xSemaphoreSensor = xSemaphoreCreateBinary();
  	xSemaphoreGive(xSemaphoreSensor);
    
+<<<<<<< HEAD
     xTaskCreate(compFilter, "Complementary Filter", configMINIMAL_STACK_SIZE, NULL, 3, &taskComp);
     xTaskCreate(LQR, "Controller", configMINIMAL_STACK_SIZE, NULL, 2, &taskContr);
     xTaskCreate(setPointGen, "Set Point Generator", configMINIMAL_STACK_SIZE, NULL, 1, &taskSet);
+=======
+    xTaskCreate(compFilter, "Complementary Filter", configMINIMAL_STACK_SIZE, NULL, 3, taskComp);
+    xTaskCreate(LQR, "Controller", configMINIMAL_STACK_SIZE, NULL, 2, taskContr);
+    xTaskCreate(setPointGen, "Set Point Generator", configMINIMAL_STACK_SIZE, NULL, 1 taskSet);
+>>>>>>> 06ef38a1b07fba1a1e2086d31be2060e24a15e86
  }
 
 
